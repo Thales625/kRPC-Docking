@@ -25,6 +25,9 @@ drawing = conn.drawing
 surface_ref = vessel.surface_reference_frame
 vessel_ref = vessel.reference_frame
 
+vessel_dp = vessel.parts.controlling.docking_port
+if vessel_dp is None: raise Exception("Set control to the Docking Port!")
+
 target_vessel = space_center.target_vessel
 if target_vessel is None:
     target_dp = space_center.target_docking_port
@@ -73,22 +76,25 @@ vx_max = 10
 vy_max = 10
 vz_max = 10
 
+# DP POS
+vessel_dp_pos = Vector3(vessel_dp.position(vessel_ref))
+
 # INIT
 phase = 0
 control.forward = 0
 control.right = 0
 control.up = 0
 
-control.rcs = False
-
 target_vessel.control.sas = True
 
-auto_pilot.target_direction = -Vector3(space_center.transform_direction(stream_target_dir(), vessel_ref, surface_ref))
-auto_pilot.wait()
-
+# WAIT AIM
+control.rcs = False
+while abs(auto_pilot.error) > 1:
+    auto_pilot.target_direction = -Vector3(space_center.transform_direction(stream_target_dir(), vessel_ref, surface_ref))
+    sleep(0.5)
 control.rcs = True
 
-while True: 
+while True:
     sleep(0.05)
     vel = Vector3(stream_vel()) # VESSEL REF
     target_pos = Vector3(stream_target_pos()) # VESSEL REF
@@ -98,13 +104,14 @@ while True:
 
     a_rcs = (force / mass) * 0.1
 
+    delta = target_pos - vessel_dp_pos
+
     if phase == 0:
-        delta = target_pos + target_dir * 5
+        delta += target_dir * 5
         if delta.magnitude() < 0.1: phase = 1
     elif phase == 1:
-        delta = target_pos
         vy_max = .1
-    
+
     vx_target = -a_rcs.x * sqrt(abs(delta.x) / a_rcs.x) * sign(delta.x)
     vy_target = -a_rcs.y * sqrt(abs(delta.y) / a_rcs.y) * sign(delta.y)
     vz_target = -a_rcs.z * sqrt(abs(delta.z) / a_rcs.z) * sign(delta.z)
