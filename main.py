@@ -4,6 +4,8 @@ from math import sqrt
 
 from Vector import Vector3
 
+from PhaseController import PhaseController
+
 def sign(v):
     if v == 0: return 0
     if v > 0: return 1
@@ -61,26 +63,69 @@ line_x.color = (1, 0, 0)
 line_y.color = (0, 1, 0)
 line_z.color = (0, 0, 1)
 
-'''
-drawing.add_line((0, 0, 0), (10, 0, 0), vessel_ref).color = (1, 0, 0) # UP
-drawing.add_line((0, 0, 0), (0, 10, 0), vessel_ref).color = (0, 1, 0) # FORWARD
-drawing.add_line((0, 0, 0), (0, 0, 10), vessel_ref).color = (0, 0, 1) # RIGHT
-'''
-
 # SIZES
-#target_max_radius = max([Vector3(i).magnitude() for i in target_vessel.bounding_box(target_vessel.reference_frame)])
-#vessel_max_radius = max([Vector3(i).magnitude() for i in vessel.bounding_box(vessel_ref)])
+target_max_radius = max([Vector3(i).magnitude() for i in target_vessel.bounding_box(target_vessel.reference_frame)])
+vessel_max_radius = max([Vector3(i).magnitude() for i in vessel.bounding_box(vessel_ref)])
+sum_radius = target_max_radius + vessel_max_radius + 1
 
 # PARAMS
 vx_max = 10
 vy_max = 10
 vz_max = 10
+docking_dist = 2
 
 # DP POS
 vessel_dp_pos = Vector3(vessel_dp.position(vessel_ref))
 
+# PHASE CONTROLLER
+def aproach_transition():
+    global target_pos, target_dir
+    
+    if (-target_pos.normalize()).dot(target_dir) > 0:
+        phase_controller.next_phase()
+        return
+
+def aproach():
+    global delta
+    delta = target_pos - sum_radius * Vector3(delta.x, 0, delta.z).normalize()
+
+    print("APROACH")
+
+    if delta.magnitude() < 0.5:
+        phase_controller.next_phase()
+
+def correct_y():
+    global delta, target_dir
+
+    print("CORRECT")
+
+    delta.y += target_dir.y * docking_dist
+    delta.x = 0
+    delta.z = 0
+    
+    if abs(delta.y) < 0.5:
+        phase_controller.next_phase()
+
+def go_target():
+    global delta, target_dir
+
+    print("GO_TARGET")
+    
+    delta += target_dir * docking_dist
+
+    if delta.magnitude() < 0.1:
+        phase_controller.next_phase()
+
+def docking():
+    global vy_max
+
+    print("DOCKING")
+
+    vy_max = .1
+
+phase_controller = PhaseController([(lambda: phase_controller.next_phase(), None), (aproach, aproach_transition), (correct_y, None), (go_target, None), (docking, None)]) # STAGES: aproach, go_target, docking
+
 # INIT
-phase = 0
 control.forward = 0
 control.right = 0
 control.up = 0
@@ -92,10 +137,13 @@ control.rcs = False
 while abs(auto_pilot.error) > 1:
     auto_pilot.target_direction = -Vector3(space_center.transform_direction(stream_target_dir(), vessel_ref, surface_ref))
     sleep(0.5)
+auto_pilot.wait()
 control.rcs = True
 
 while True:
     sleep(0.05)
+
+    # GET STREAMS
     vel = Vector3(stream_vel()) # VESSEL REF
     target_pos = Vector3(stream_target_pos()) # VESSEL REF
     target_dir = Vector3(stream_target_dir()) # VESSEL REF
@@ -103,19 +151,20 @@ while True:
     force = Vector3(stream_rcs_force()[0])
 
     a_rcs = (force / mass) * 0.1
+    '''
+    TODO
+    control rcs forward with different force than backward, same for other axis
+    '''
 
     delta = target_pos - vessel_dp_pos
 
-    if phase == 0:
-        delta += target_dir * 5
-        if delta.magnitude() < 0.1: phase = 1
-    elif phase == 1:
-        vy_max = .1
+    phase_controller.loop()
 
+    # vel target
     vx_target = -a_rcs.x * sqrt(abs(delta.x) / a_rcs.x) * sign(delta.x)
     vy_target = -a_rcs.y * sqrt(abs(delta.y) / a_rcs.y) * sign(delta.y)
     vz_target = -a_rcs.z * sqrt(abs(delta.z) / a_rcs.z) * sign(delta.z)
-
+    
     # clamp vel target
     vx_target = clamp(vx_target, -vx_max, vx_max)
     vy_target = clamp(vy_target, -vy_max, vy_max)
@@ -130,9 +179,3 @@ while True:
     line_x.end = (delta.x, 0, 0)
     line_y.end = (0, delta.y, 0)
     line_z.end = (0, 0, delta.z)
-
-
-
-    #print(delta.x, vx_target)
-    #print(delta.y, vy_target)
-    #print(delta.z, vz_target)
