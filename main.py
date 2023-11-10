@@ -7,9 +7,8 @@ from Vector import Vector3
 from PhaseController import PhaseController
 
 def sign(v):
-    if v == 0: return 0
-    if v > 0: return 1
-    if v < 0: return -1
+    if v >= 0: return 1
+    return -1
 
 def clamp(v, min, max):
     if v > max: return max
@@ -157,10 +156,10 @@ while True:
     phase_controller.loop()
 
     # vel target
-    vx_target = -sqrt(abs(delta.x) * a_rcs.x) * sign(delta.x)
-    vy_target = -sqrt(abs(delta.y) * a_rcs.y) * sign(delta.y)
-    vz_target = -sqrt(abs(delta.z) * a_rcs.z) * sign(delta.z)
-    
+    vx_target = -sqrt(2 * abs(delta.x) * a_rcs.x) * sign(delta.x)
+    vy_target = -sqrt(2 * abs(delta.y) * a_rcs.y) * sign(delta.y)
+    vz_target = -sqrt(2 * abs(delta.z) * a_rcs.z) * sign(delta.z)
+
     # clamp vel target
     vx_target = clamp(vx_target, -vx_max, vx_max)
     vy_target = clamp(vy_target, -vy_max, vy_max)
