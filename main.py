@@ -151,19 +151,15 @@ while True:
     force = Vector3(stream_rcs_force()[0])
 
     a_rcs = (force / mass) * 0.1
-    '''
-    TODO
-    control rcs forward with different force than backward, same for other axis
-    '''
 
     delta = target_pos - vessel_dp_pos
 
     phase_controller.loop()
 
     # vel target
-    vx_target = -a_rcs.x * sqrt(abs(delta.x) / a_rcs.x) * sign(delta.x)
-    vy_target = -a_rcs.y * sqrt(abs(delta.y) / a_rcs.y) * sign(delta.y)
-    vz_target = -a_rcs.z * sqrt(abs(delta.z) / a_rcs.z) * sign(delta.z)
+    vx_target = -sqrt(abs(delta.x) * a_rcs.x) * sign(delta.x)
+    vy_target = -sqrt(abs(delta.y) * a_rcs.y) * sign(delta.y)
+    vz_target = -sqrt(abs(delta.z) * a_rcs.z) * sign(delta.z)
     
     # clamp vel target
     vx_target = clamp(vx_target, -vx_max, vx_max)
@@ -172,7 +168,7 @@ while True:
 
     control.forward = (vel.y - vy_target) / a_rcs.y
     control.right = (vel.x - vx_target) / a_rcs.x
-    control.up = -(vel.z - vz_target) / a_rcs.z
+    control.up = -(vel.z - vz_target) / a_rcs.z # Vector3 
 
     auto_pilot.target_direction = -Vector3(space_center.transform_direction(target_dir, vessel_ref, surface_ref))
 
