@@ -2,7 +2,7 @@ import krpc
 from time import sleep
 from math import sqrt
 
-from Vector import Vector3
+from PyVecs import Vector3
 
 from PhaseController import PhaseController
 
@@ -77,6 +77,18 @@ docking_dist = 2
 vessel_dp_pos = Vector3(vessel_dp.position(vessel_ref))
 
 # PHASE CONTROLLER
+def wait_aim():
+    control.rcs = False
+
+    while abs(auto_pilot.error) > 1:
+        print(Vector3(vessel.angular_velocity(surface_ref)).magnitude())
+        auto_pilot.target_direction = -Vector3(space_center.transform_direction(stream_target_dir(), vessel_ref, surface_ref))
+        sleep(0.5)
+
+    control.rcs = True
+
+    phase_controller.next_phase()
+
 def aproach_transition():
     global target_pos, target_dir
     
@@ -122,7 +134,10 @@ def docking():
 
     vy_max = .1
 
-phase_controller = PhaseController([(lambda: phase_controller.next_phase(), None), (aproach, aproach_transition), (correct_y, None), (go_target, None), (docking, None)]) # STAGES: aproach, go_target, docking
+phase_controller = PhaseController([(wait_aim, None), (aproach, aproach_transition), (correct_y, None), (go_target, None), (docking, None)]) # STAGES: aproach, go_target, docking
+
+# CONST
+sqrt_two = sqrt(2)
 
 # INIT
 control.forward = 0
@@ -130,17 +145,6 @@ control.right = 0
 control.up = 0
 
 target_vessel.control.sas = True
-
-# CONST
-sqrt_two = sqrt(2)
-
-# WAIT AIM
-control.rcs = False
-while abs(auto_pilot.error) > 1:
-    auto_pilot.target_direction = -Vector3(space_center.transform_direction(stream_target_dir(), vessel_ref, surface_ref))
-    sleep(0.5)
-auto_pilot.wait()
-control.rcs = True
 
 while True:
     sleep(0.05)
