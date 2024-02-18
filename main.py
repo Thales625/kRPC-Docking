@@ -81,11 +81,13 @@ def wait_aim():
     control.rcs = False
 
     while abs(auto_pilot.error) > 1:
-        print(Vector3(vessel.angular_velocity(surface_ref)).magnitude())
+        print(Vector3(vessel.angular_velocity(surface_ref)).magnitude(), auto_pilot.error)
         auto_pilot.target_direction = -Vector3(space_center.transform_direction(stream_target_dir(), vessel_ref, surface_ref))
         sleep(0.5)
 
     control.rcs = True
+
+    sleep(0.5)
 
     phase_controller.next_phase()
 
@@ -150,37 +152,41 @@ while True:
     sleep(0.05)
 
     # get streams
-    vel = Vector3(stream_vel()) # VESSEL REF
-    target_pos = Vector3(stream_target_pos()) # VESSEL REF
-    target_dir = Vector3(stream_target_dir()) # VESSEL REF
-    force_rcs = Vector3(stream_rcs_force()[0]) # VESSEL REF
-    mass = stream_mass()
+    try:
+        vel = Vector3(stream_vel()) # VESSEL REF
+        target_pos = Vector3(stream_target_pos()) # VESSEL REF
+        target_dir = Vector3(stream_target_dir()) # VESSEL REF
+        force_rcs = Vector3(stream_rcs_force()[0]) # VESSEL REF
+        mass = stream_mass()
+    
+        a_rcs = (force_rcs / mass) * 0.1
 
-    a_rcs = (force_rcs / mass) * 0.1
+        delta = target_pos - vessel_dp_pos
 
-    delta = target_pos - vessel_dp_pos
+        phase_controller.loop()
 
-    phase_controller.loop()
+        # vel target
+        vx_target = (-sqrt_two * sqrt(a_rcs.x) * (delta.x / sqrt(abs(delta.x)))) if delta.x != 0 else 0
+        vy_target = (-sqrt_two * sqrt(a_rcs.y) * (delta.y / sqrt(abs(delta.y)))) if delta.y != 0 else 0
+        vz_target = (-sqrt_two * sqrt(a_rcs.z) * (delta.z / sqrt(abs(delta.z)))) if delta.z != 0 else 0
 
-    # vel target
-    vx_target = (-sqrt_two * sqrt(a_rcs.x) * (delta.x / sqrt(abs(delta.x)))) if delta.x != 0 else 0
-    vy_target = (-sqrt_two * sqrt(a_rcs.y) * (delta.y / sqrt(abs(delta.y)))) if delta.y != 0 else 0
-    vz_target = (-sqrt_two * sqrt(a_rcs.z) * (delta.z / sqrt(abs(delta.z)))) if delta.z != 0 else 0
+        # clamp vel target
+        vx_target = clamp(vx_target, -vx_max, vx_max)
+        vy_target = clamp(vy_target, -vy_max, vy_max)
+        vz_target = clamp(vz_target, -vz_max, vz_max)
 
-    # clamp vel target
-    vx_target = clamp(vx_target, -vx_max, vx_max)
-    vy_target = clamp(vy_target, -vy_max, vy_max)
-    vz_target = clamp(vz_target, -vz_max, vz_max)
+        # rcs control
+        control.forward =  (vel.y - vy_target) / a_rcs.y
+        control.right   =  (vel.x - vx_target) / a_rcs.x
+        control.up      = -(vel.z - vz_target) / a_rcs.z # -BOTTOM
 
-    # rcs control
-    control.forward =  (vel.y - vy_target) / a_rcs.y
-    control.right   =  (vel.x - vx_target) / a_rcs.x
-    control.up      = -(vel.z - vz_target) / a_rcs.z # -BOTTOM
+        # auto pilot aim
+        auto_pilot.target_direction = -Vector3(space_center.transform_direction(target_dir, vessel_ref, surface_ref))
 
-    # auto pilot aim
-    auto_pilot.target_direction = -Vector3(space_center.transform_direction(target_dir, vessel_ref, surface_ref))
-
-    # lines draw
-    line_x.end = (delta.x, 0, 0)
-    line_y.end = (0, delta.y, 0)
-    line_z.end = (0, 0, delta.z)
+        # lines draw
+        line_x.end = (delta.x, 0, 0)
+        line_y.end = (0, delta.y, 0)
+        line_z.end = (0, 0, delta.z)
+    except ValueError as e:
+        print("End program")
+        break
